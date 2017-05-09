@@ -183,6 +183,7 @@ func TestFatal(t *testing.T) {
 		})
 
 		l15h.Fatal(msg)
+		So(i, ShouldEqual, 1)
 		So(buff.String(), ShouldContainSubstring, " lvl=crit msg=msg fatal=true")
 
 		Convey("And on a logger with context", func() {
