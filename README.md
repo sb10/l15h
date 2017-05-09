@@ -1,5 +1,10 @@
 # l15h
 
+[![Go Report Card](https://goreportcard.com/badge/github.com/sb10/l15h)](https://goreportcard.com/report/github.com/sb10/l15h)
+[![GoDoc](https://godoc.org/github.com/sb10/l15h?status.svg)](https://godoc.org/github.com/sb10/l15h)
+[![Build Status](https://travis-ci.org/sb10/l15h.svg?branch=master)](https://travis-ci.org/sb10/l15h)
+[![Coverage Status](https://coveralls.io/repos/github/sb10/l15h/badge.svg?branch=master)](https://coveralls.io/github/sb10/l15h?branch=master)
+
 l15h provides some useful Handlers and logging methods for use with log15:
 https://github.com/inconshreveable/log15
 
