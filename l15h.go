@@ -157,22 +157,27 @@ func CallerInfoHandler(h log15.Handler) log15.Handler {
 
 // Changer struct lets you dynamically change the Handler of all loggers that
 // inherit from a logger that uses a ChangeableHandler, which takes one of
-// these.
+// these. A Changer is safe for concurrent use.
 type Changer struct {
 	mutex   sync.RWMutex
 	handler log15.Handler
 }
 
+// NewChanger creates a Changer for supplying to ChangeableHandler and keeping
+// for later use.
 func NewChanger(h log15.Handler) *Changer {
 	return &Changer{handler: h}
 }
 
+// GetHandler returns the previously set Handler.
 func (c *Changer) GetHandler() log15.Handler {
 	c.mutex.RLock()
 	defer c.mutex.RUnlock()
 	return c.handler
 }
 
+// SetHandler sets a new Handler on the Changer, so that any logger that is
+// using a ChangeableHandler with this Changer will not log to this new Handler.
 func (c *Changer) SetHandler(h log15.Handler) {
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
