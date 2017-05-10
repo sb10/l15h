@@ -8,57 +8,61 @@
 l15h provides some useful Handlers and logging methods for use with log15:
 https://github.com/inconshreveable/log15
 
-## Usage
+log15 is a levelled logger with these levels:
 
-    import (
-        log "github.com/inconshreveable/log15"
-        "github.com/sb10/l15h"
-    )
+* `Debug("debug msg")`
+* `Info("info msg")`
+* `Warn("warning msg")`
+* `Error("error msg")`
+* `Crit("critical msg")`
 
-    // Store logs in memory for dealing with later
-    store := &l15h.Store{}
-    h := log.MultiHandler(
-        l15h.StoreHandler(store, log.LogfmtFormat()),
-        log.StderrHandler,
-    )
-    log.Root().SetHandler(h)
-    log.Debug("debug")
-    log.Info("info")
-    logs := store.Logs() // logs is a slice of your 2 log messages as strings
+l15h provides these convenience methods which log at the Crit level:
 
-    // Always annotate your logs (other than Info()) with some caller
-    // information, with Crit() getting a stack trace
-    h = l15h.CallerInfoHandler(log.StderrHandler)
-    log.Root().SetHandler(h)
-    log.Debug("debug") // includes a caller=
-    log.Info("info") // nothing added
-    log.Crit("crit") // includes a stack=
+* `Panic("panic msg")`
+* `PanicContext(logger, "panic msg")`
+* `Fatal("fatal msg")`
+* `FatalContext(logger, "fatal msg")`
 
-    // Combine it all together
-    h = l15h.CallerInfoHandler(
-        log.MultiHandler(
-            l15h.StoreHandler(store, log.LogfmtFormat()),
-            log.StderrHandler,
-        )
-    )
-    //...
-    
-    // Have child loggers that change how they log when their parent's Handler
-    // changes
-    changer := l15h.NewChanger(log15.DiscardHandler())
-    log.Root().SetHandler(l15h.ChangeableHandler(changer))
-    log.Info("discarded") // nothing logged
+log15 log messages can have structure by supplying key/value pairs to the above
+methods, eg. `Debug("my msg", "url", "google.com", "retries", 3, "err", err)`
 
-    childLogger := log.New("child", "context")
-    store = l15h.NewStore()
-    l15h.AddHandler(childLogger, l15h.StoreHandler(store, log.LogfmtFormat()))
+log15 loggers can have and inherit key/value context:
 
-    childLogger.Info("one") // len(store.Logs()) == 1
+    pkgLog := log15.New("pkg", "mypkg")
+    structLog := pkgLog.New("struct", "mystruct", "id", struct.ID)
+    structLog.Info("started", "foo", "bar")
 
-    changer.SetHandler(log15.StderrHandler)
-    log.Info("logged") // logged to STDERR
-    childLogger.Info("two") // logged to STDERR and len(store.Logs()) == 2
+Which would give output like:
 
-    // We have Panic and Fatal methods
-    l15h.Panic("msg")
-    l15h.Fatal("msg")
+    INFO[06-17|21:58:10] started     pkg=mypkg struct=mystruct id=1 foo=bar
+
+One of log15's best features is the ability to set composable Handlers that
+determine where log output goes and what it looks like. l15h provides these
+additional handlers:
+
+* StoreHandler
+* CallerInfoHandler
+* ChangeableHandler
+
+l15h also provides a convenience method for adding a new handler to a logger's
+existing handler(s):
+
+* `AddHandler(logger, newHandler)`
+
+See the GoDoc for usage examples.
+
+## Installation
+
+    go get github.com/sb10/l15h
+
+## Importing
+
+```go
+import "github.com/sb10/l15h"
+```
+
+## Versioning
+
+The API of the master branch of l15h will probably remain backwards compatible,
+but this is not guaranteed. If you want to rely on a stable API, you must vendor
+the library.
