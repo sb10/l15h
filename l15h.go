@@ -91,7 +91,7 @@ var exitFunc = os.Exit
 // StoreHandler and set that handler on your logger, then log messages.
 // Store.Logs() will then give you access to everything that was logged.
 type Store struct {
-	mutex    sync.Mutex
+	mutex    sync.RWMutex
 	storeage []string
 }
 
@@ -110,8 +110,8 @@ func (s *Store) keep(log string) {
 
 // Logs returns all the log messages that have been logged with this Store.
 func (s *Store) Logs() []string {
-	s.mutex.Lock()
-	defer s.mutex.Unlock()
+	s.mutex.RLock()
+	defer s.mutex.RUnlock()
 	return s.storeage[:]
 }
 
@@ -159,7 +159,7 @@ func CallerInfoHandler(h log15.Handler) log15.Handler {
 // inherit from a logger that uses a ChangeableHandler, which takes one of
 // these.
 type Changer struct {
-	mutex   sync.Mutex
+	mutex   sync.RWMutex
 	handler log15.Handler
 }
 
@@ -168,8 +168,8 @@ func NewChanger(h log15.Handler) *Changer {
 }
 
 func (c *Changer) GetHandler() log15.Handler {
-	c.mutex.Lock()
-	defer c.mutex.Unlock()
+	c.mutex.RLock()
+	defer c.mutex.RUnlock()
 	return c.handler
 }
 
