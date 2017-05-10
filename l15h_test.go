@@ -32,7 +32,7 @@ func TestStore(t *testing.T) {
 	Convey("You can set up the StoreHandler", t, func() {
 		buff := new(bytes.Buffer)
 
-		store := &l15h.Store{}
+		store := l15h.NewStore()
 		h := log.MultiHandler(
 			l15h.StoreHandler(store, log.LogfmtFormat()),
 			log.StreamHandler(buff, log.LogfmtFormat()),
@@ -124,6 +124,45 @@ func TestCaller(t *testing.T) {
 
 		Reset(func() {
 			buff.Reset()
+		})
+	})
+}
+
+func TestChanger(t *testing.T) {
+	Convey("You can set up the ChangeableHandler", t, func() {
+		buff := new(bytes.Buffer)
+
+		changer := l15h.NewChanger(log.DiscardHandler())
+		log.Root().SetHandler(l15h.ChangeableHandler(changer))
+
+		Convey("You can log a message to the original handler", func() {
+			log.Info("one")
+			So(buff.String(), ShouldBeEmpty)
+
+			Convey("You can create a new logger that inherits the changer and adds a new Handler", func() {
+				child := log.New("child", "true")
+				store := l15h.NewStore()
+				l15h.AddHandler(child, l15h.StoreHandler(store, log.LogfmtFormat()))
+
+				log.Info("two")
+				So(buff.String(), ShouldBeEmpty)
+				child.Info("1")
+				So(buff.String(), ShouldBeEmpty)
+				So(len(store.Logs()), ShouldEqual, 1)
+
+				Convey("You can change the logger and it affects the root and child logger", func() {
+					changer.SetHandler(log.StreamHandler(buff, log.LogfmtFormat()))
+
+					log.Info("three")
+					So(buff.String(), ShouldContainSubstring, " msg=three")
+					So(buff.String(), ShouldNotContainSubstring, "child")
+					buff.Reset()
+					child.Info("2")
+					So(buff.String(), ShouldContainSubstring, " msg=2")
+					So(buff.String(), ShouldContainSubstring, " child=true")
+					So(len(store.Logs()), ShouldEqual, 2)
+				})
+			})
 		})
 	})
 }

@@ -42,6 +42,22 @@ https://github.com/inconshreveable/log15
         )
     )
     //...
+    
+    // Have child loggers that change how they log when their parent's Handler
+    // changes
+    changer := l15h.NewChanger(log15.DiscardHandler())
+    log.Root().SetHandler(l15h.ChangeableHandler(changer))
+    log.Info("discarded") // nothing logged
+
+    childLogger := log.New("child", "context")
+    store = l15h.NewStore()
+    l15h.AddHandler(childLogger, l15h.StoreHandler(store, log.LogfmtFormat()))
+
+    childLogger.Info("one") // len(store.Logs()) == 1
+
+    changer.SetHandler(log15.StderrHandler)
+    log.Info("logged") // logged to STDERR
+    childLogger.Info("two") // logged to STDERR and len(store.Logs()) == 2
 
     // We have Panic and Fatal methods
     l15h.Panic("msg")

@@ -28,7 +28,7 @@ https://github.com/inconshreveable/log15.
     )
 
     // Store logs in memory for dealing with later
-    store := &l15h.Store{}
+    store := l15h.NewStore()
     h := log.MultiHandler(
         l15h.StoreHandler(store, log.LogfmtFormat()),
         log.StderrHandler,
@@ -46,7 +46,7 @@ https://github.com/inconshreveable/log15.
     log.Info("info") // nothing added
     log.Crit("crit") // includes a stack=
 
-    // Combine it all together
+    // Combine the above together
     h = l15h.CallerInfoHandler(
         log.MultiHandler(
             l15h.StoreHandler(store, log.LogfmtFormat()),
@@ -54,6 +54,22 @@ https://github.com/inconshreveable/log15.
         )
     )
     //...
+
+    // Have child loggers that change how they log when their parent's Handler
+    // changes
+    changer := l15h.NewChanger(log15.DiscardHandler())
+    log.Root().SetHandler(l15h.ChangeableHandler(changer))
+    log.Info("discarded") // nothing logged
+
+    childLogger := log.New("child", "context")
+    store = l15h.NewStore()
+    l15h.AddHandler(childLogger, l15h.StoreHandler(store, log.LogfmtFormat()))
+
+    childLogger.Info("one") // len(store.Logs()) == 1
+
+    changer.SetHandler(log15.StderrHandler)
+    log.Info("logged") // logged to STDERR
+    childLogger.Info("two") // logged to STDERR and len(store.Logs()) == 2
 
     // We have Panic and Fatal methods
     l15h.Panic("msg")
@@ -77,6 +93,12 @@ var exitFunc = os.Exit
 type Store struct {
 	mutex    sync.Mutex
 	storeage []string
+}
+
+// NewStore creates a Store for supplying to StoreHandler and keeping for later
+// use.
+func NewStore() *Store {
+	return &Store{}
 }
 
 // keep stores a new log in our storage.
@@ -131,6 +153,54 @@ func CallerInfoHandler(h log15.Handler) log15.Handler {
 		}
 		return h.Log(r)
 	})
+}
+
+// Changer struct lets you dynamically change the Handler of all loggers that
+// inherit from a logger that uses a ChangeableHandler, which takes one of
+// these.
+type Changer struct {
+	mutex   sync.Mutex
+	handler log15.Handler
+}
+
+func NewChanger(h log15.Handler) *Changer {
+	return &Changer{handler: h}
+}
+
+func (c *Changer) GetHandler() log15.Handler {
+	c.mutex.Lock()
+	defer c.mutex.Unlock()
+	return c.handler
+}
+
+func (c *Changer) SetHandler(h log15.Handler) {
+	c.mutex.Lock()
+	defer c.mutex.Unlock()
+	c.handler = h
+}
+
+// ChangeableHandler is for use when you your library will start with a base
+// logger and create New() loggers from that, inheriting its Handler and
+// possibly adding its own (eg. with AddHandler()) such as the StoreHandler.
+// But you want a user of your library to be able to change the Handler for all
+// your loggers. You can do this by setting a ChangeableHandler on your base
+// logger, and giving users of your library access to your Changer, which they
+// can call SetHandler() on to define how things are logged any way they like.
+func ChangeableHandler(changer *Changer) log15.Handler {
+	return log15.FuncHandler(func(r *log15.Record) error {
+		return changer.GetHandler().Log(r)
+	})
+}
+
+// AddHandler is a convenience for adding an additional handler to a logger,
+// keeping any existing ones. Note that this simply puts the existing handler
+// and the new handler within a MultiHandler, so you should probably avoid
+// calling this too many times on the same logger (or its descendants).
+func AddHandler(l log15.Logger, h log15.Handler) {
+	l.SetHandler(log15.MultiHandler(
+		l.GetHandler(),
+		h,
+	))
 }
 
 // Panic logs a message at the Crit level with key/val panic=true added to the
