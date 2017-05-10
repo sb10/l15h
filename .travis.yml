@@ -5,4 +5,5 @@ go:
 before_install:
   - go get github.com/mattn/goveralls
 script:
-  - $HOME/gopath/bin/goveralls -v -service travis-ci
+  - go test -v -coverprofile=l15h.coverprofile -covermode count .
+  - $HOME/gopath/bin/goveralls -coverprofile=l15h.coverprofile -service travis-ci
