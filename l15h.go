@@ -177,7 +177,7 @@ func (c *Changer) GetHandler() log15.Handler {
 }
 
 // SetHandler sets a new Handler on the Changer, so that any logger that is
-// using a ChangeableHandler with this Changer will not log to this new Handler.
+// using a ChangeableHandler with this Changer will now log to this new Handler.
 func (c *Changer) SetHandler(h log15.Handler) {
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
