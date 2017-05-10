@@ -1,7 +1,7 @@
 # l15h
 
-[![Go Report Card](https://goreportcard.com/badge/github.com/sb10/l15h)](https://goreportcard.com/report/github.com/sb10/l15h)
 [![GoDoc](https://godoc.org/github.com/sb10/l15h?status.svg)](https://godoc.org/github.com/sb10/l15h)
+[![Go Report Card](https://goreportcard.com/badge/github.com/sb10/l15h)](https://goreportcard.com/report/github.com/sb10/l15h)
 [![Build Status](https://travis-ci.org/sb10/l15h.svg?branch=master)](https://travis-ci.org/sb10/l15h)
 [![Coverage Status](https://coveralls.io/repos/github/sb10/l15h/badge.svg?branch=master)](https://coveralls.io/github/sb10/l15h?branch=master)
 
@@ -24,7 +24,7 @@ https://github.com/inconshreveable/log15
     log.Root().SetHandler(h)
     log.Debug("debug")
     log.Info("info")
-    logs := store.Logs() // logs is a slice of your 2 logs messages as strings
+    logs := store.Logs() // logs is a slice of your 2 log messages as strings
 
     // Always annotate your logs (other than Info()) with some caller
     // information, with Crit() getting a stack trace

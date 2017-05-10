@@ -36,7 +36,7 @@ https://github.com/inconshreveable/log15.
     log.Root().SetHandler(h)
     log.Debug("debug")
     log.Info("info")
-    logs := store.Logs() // logs is a slice of your 2 logs messages as strings
+    logs := store.Logs() // logs is a slice of your 2 log messages as strings
 
     // Always annotate your logs (other than Info()) with some caller
     // information, with Crit() getting a stack trace
