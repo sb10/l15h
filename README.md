@@ -2,11 +2,9 @@
 
 [![GoDoc](https://godoc.org/github.com/sb10/l15h?status.svg)](https://godoc.org/github.com/sb10/l15h)
 [![Go Report Card](https://goreportcard.com/badge/github.com/sb10/l15h)](https://goreportcard.com/report/github.com/sb10/l15h)
-[![Build Status](https://travis-ci.org/sb10/l15h.svg?branch=master)](https://travis-ci.org/sb10/l15h)
-[![Coverage Status](https://coveralls.io/repos/github/sb10/l15h/badge.svg?branch=master)](https://coveralls.io/github/sb10/l15h?branch=master)
 
-l15h provides some useful Handlers and logging methods for use with log15:
-https://github.com/inconshreveable/log15
+l15h provides some useful Handlers and logging methods for use with log15 v3:
+https://github.com/inconshreveable/log15/tree/master/v3
 
 log15 is a levelled logger with these levels:
 
@@ -53,16 +51,15 @@ See the GoDoc for usage examples.
 
 ## Installation
 
-    go get github.com/sb10/l15h
+    go get github.com/sb10/l15h/v2
 
 ## Importing
 
 ```go
-import "github.com/sb10/l15h"
+import "github.com/sb10/l15h/v2"
 ```
 
 ## Versioning
 
-The API of the master branch of l15h will probably remain backwards compatible,
-but this is not guaranteed. If you want to rely on a stable API, you must vendor
-the library.
+v2 uses Go modules and log15 v3. Future breaking changes will use new major
+module paths.

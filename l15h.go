@@ -18,81 +18,89 @@
 
 /*
 Package l15h provides some useful Handlers for use with log15:
-https://github.com/inconshreveable/log15.
+https://pkg.go.dev/github.com/inconshreveable/log15/v3.
 
 # Usage
 
-    import (
-        log "github.com/inconshreveable/log15"
-        "github.com/sb10/l15h"
-    )
+	import (
+	    log "github.com/inconshreveable/log15/v3"
+	    "github.com/sb10/l15h/v2"
+	)
 
-    // Store logs in memory for dealing with later
-    store := l15h.NewStore()
-    h := log.MultiHandler(
-        l15h.StoreHandler(store, log.LogfmtFormat()),
-        log.StderrHandler,
-    )
-    log.Root().SetHandler(h)
-    log.Debug("debug")
-    log.Info("info")
-    logs := store.Logs() // logs is a slice of your 2 log messages as strings
+	// Store logs in memory for dealing with later
+	store := l15h.NewStore()
+	h := log.MultiHandler(
+	    l15h.StoreHandler(store, log.LogfmtFormat()),
+	    log.StderrHandler,
+	)
+	log.Root().SetHandler(h)
+	log.Debug("debug")
+	log.Info("info")
+	logs := store.Logs() // logs is a slice of your 2 log messages as strings
 
-    // Always annotate your logs (other than Info()) with some caller
-    // information, with Crit() getting a stack trace
-    h = l15h.CallerInfoHandler(log.StderrHandler)
-    log.Root().SetHandler(h)
-    log.Debug("debug") // includes a caller=
-    log.Info("info") // nothing added
-    log.Crit("crit") // includes a stack=
+	// Always annotate your logs (other than Info()) with some caller
+	// information, with Crit() getting a stack trace
+	h = l15h.CallerInfoHandler(log.StderrHandler)
+	log.Root().SetHandler(h)
+	log.Debug("debug") // includes a caller=
+	log.Info("info") // nothing added
+	log.Crit("crit") // includes a stack=
 
-    // Combine the above together
-    h = l15h.CallerInfoHandler(
-        log.MultiHandler(
-            l15h.StoreHandler(store, log.LogfmtFormat()),
-            log.StderrHandler,
-        )
-    )
-    //...
+	// Combine the above together
+	h = l15h.CallerInfoHandler(
+	    log.MultiHandler(
+	        l15h.StoreHandler(store, log.LogfmtFormat()),
+	        log.StderrHandler,
+	    )
+	)
+	//...
 
-    // Have child loggers that change how they log when their parent's Handler
-    // changes
-    changer := l15h.NewChanger(log15.DiscardHandler())
-    log.Root().SetHandler(l15h.ChangeableHandler(changer))
-    log.Info("discarded") // nothing logged
+	// Have child loggers that change how they log when their parent's Handler
+	// changes
+	changer := l15h.NewChanger(log.DiscardHandler())
+	log.Root().SetHandler(l15h.ChangeableHandler(changer))
+	log.Info("discarded") // nothing logged
 
-    childLogger := log.New("child", "context")
-    store = l15h.NewStore()
-    l15h.AddHandler(childLogger, l15h.StoreHandler(store, log.LogfmtFormat()))
+	childLogger := log.New("child", "context")
+	store = l15h.NewStore()
+	l15h.AddHandler(childLogger, l15h.StoreHandler(store, log.LogfmtFormat()))
 
-    childLogger.Info("one") // len(store.Logs()) == 1
+	childLogger.Info("one") // len(store.Logs()) == 1
 
-    changer.SetHandler(log15.StderrHandler)
-    log.Info("logged") // logged to STDERR
-    childLogger.Info("two") // logged to STDERR and len(store.Logs()) == 2
+	changer.SetHandler(log.StderrHandler)
+	log.Info("logged") // logged to STDERR
+	childLogger.Info("two") // logged to STDERR and len(store.Logs()) == 2
 
-    // We have Panic and Fatal methods
-    l15h.Panic("msg")
-    l15h.Fatal("msg")
+	// We have Panic and Fatal methods
+	l15h.Panic("msg")
+	l15h.Fatal("msg")
 */
 package l15h
 
 import (
 	"fmt"
-	"github.com/go-stack/stack"
-	"github.com/inconshreveable/log15"
 	"os"
+	"path/filepath"
+	"runtime"
+	"strings"
 	"sync"
+
+	"github.com/inconshreveable/log15/v3"
 )
 
-var exitFunc = os.Exit
+const maxStackDepth = 64
+
+var (
+	exitFunc       = os.Exit
+	l15hSourceFile = currentSourceFile()
+)
 
 // Store struct is used for passing to StoreHandler. Create one, pass it to
 // StoreHandler and set that handler on your logger, then log messages.
 // Store.Logs() will then give you access to everything that was logged.
 type Store struct {
-	mutex    sync.RWMutex
-	storeage []string
+	mutex   sync.RWMutex
+	storage []string
 }
 
 // NewStore creates a Store for supplying to StoreHandler and keeping for later
@@ -105,14 +113,14 @@ func NewStore() *Store {
 func (s *Store) keep(log string) {
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
-	s.storeage = append(s.storeage, log)
+	s.storage = append(s.storage, log)
 }
 
 // Logs returns all the log messages that have been logged with this Store.
 func (s *Store) Logs() []string {
 	s.mutex.RLock()
 	defer s.mutex.RUnlock()
-	return s.storeage[:]
+	return append([]string(nil), s.storage...)
 }
 
 // Clear empties this Store's storage. Afterwards, Logs() will return an empty
@@ -120,14 +128,14 @@ func (s *Store) Logs() []string {
 func (s *Store) Clear() {
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
-	s.storeage = nil
+	s.storage = nil
 }
 
 // StoreHandler stores log records in the given Store. It is safe to perform
 // concurrent stores. StoreHandler wraps itself with LazyHandler to evaluate
 // Lazy objects.
 func StoreHandler(store *Store, fmtr log15.Format) log15.Handler {
-	h := log15.FuncHandler(func(r *log15.Record) error {
+	h := log15.FuncHandler(func(r log15.Record) error {
 		store.keep(string(fmtr.Format(r)))
 		return nil
 	})
@@ -141,18 +149,91 @@ func StoreHandler(store *Store, fmtr log15.Format) log15.Handler {
 // list of call sites inside matching []'s. The most recent call site is listed
 // first.
 func CallerInfoHandler(h log15.Handler) log15.Handler {
-	return log15.FuncHandler(func(r *log15.Record) error {
+	return log15.FuncHandler(func(r log15.Record) error {
 		switch r.Lvl {
 		case log15.LvlDebug, log15.LvlWarn, log15.LvlError:
-			r.Ctx = append(r.Ctx, "caller", fmt.Sprint(r.Call))
+			if caller := callerInfo(); caller != "" {
+				r.Ctx = append(r.Ctx, "caller", caller)
+			}
 		case log15.LvlCrit:
-			s := stack.Trace().TrimBelow(r.Call).TrimRuntime()
-			if len(s) > 0 {
-				r.Ctx = append(r.Ctx, "stack", fmt.Sprintf("%+v", s))
+			if stack := callerStack(); stack != "" {
+				r.Ctx = append(r.Ctx, "stack", stack)
 			}
 		}
 		return h.Log(r)
 	})
+}
+
+func callerInfo() string {
+	sites := callSites()
+	if len(sites) == 0 {
+		return ""
+	}
+
+	return sites[0]
+}
+
+func callerStack() string {
+	sites := callSites()
+	if len(sites) == 0 {
+		return ""
+	}
+
+	return fmt.Sprintf("[%s]", strings.Join(sites, " "))
+}
+
+func callSites() []string {
+	var pcs [maxStackDepth]uintptr
+	n := runtime.Callers(0, pcs[:])
+	frames := runtime.CallersFrames(pcs[:n])
+	sites := make([]string, 0, n)
+	foundCaller := false
+
+	for {
+		frame, more := frames.Next()
+		if !foundCaller {
+			if isInternalFrame(frame.Function, frame.File) {
+				if !more {
+					break
+				}
+
+				continue
+			}
+
+			foundCaller = true
+		}
+
+		if isRuntimeFrame(frame.Function) {
+			break
+		}
+
+		sites = append(sites, fmt.Sprintf("%s:%d", filepath.Base(frame.File), frame.Line))
+		if !more {
+			break
+		}
+	}
+
+	return sites
+}
+
+func isInternalFrame(function, file string) bool {
+	return function == "runtime.Callers" ||
+		file == l15hSourceFile ||
+		strings.HasPrefix(function, "github.com/inconshreveable/log15/v3.") ||
+		strings.HasPrefix(function, "github.com/sb10/l15h/v2.")
+}
+
+func isRuntimeFrame(function string) bool {
+	return strings.HasPrefix(function, "runtime.")
+}
+
+func currentSourceFile() string {
+	_, file, _, ok := runtime.Caller(0)
+	if !ok {
+		return ""
+	}
+
+	return file
 }
 
 // Changer struct lets you dynamically change the Handler of all loggers that
@@ -184,7 +265,7 @@ func (c *Changer) SetHandler(h log15.Handler) {
 	c.handler = h
 }
 
-// ChangeableHandler is for use when you your library will start with a base
+// ChangeableHandler is for use when your library will start with a base
 // logger and create New() loggers from that, inheriting its Handler and
 // possibly adding its own (eg. with AddHandler()) such as the StoreHandler.
 // But you want a user of your library to be able to change the Handler for all
@@ -192,7 +273,7 @@ func (c *Changer) SetHandler(h log15.Handler) {
 // logger, and giving users of your library access to your Changer, which they
 // can call SetHandler() on to define how things are logged any way they like.
 func ChangeableHandler(changer *Changer) log15.Handler {
-	return log15.FuncHandler(func(r *log15.Record) error {
+	return log15.FuncHandler(func(r log15.Record) error {
 		return changer.GetHandler().Log(r)
 	})
 }
@@ -212,13 +293,13 @@ func AddHandler(l log15.Logger, h log15.Handler) {
 // context and then calls panic(msg). Operates on the root Logger. The panic
 // will send a complete stack trace to STDERR and cause the application to
 // terminate after calling deferred functions unless recovered.
-func Panic(msg string, ctx ...interface{}) {
+func Panic(msg string, ctx ...any) {
 	PanicContext(log15.Root(), msg, ctx...)
 }
 
 // PanicContext is like Panic(), but also takes a Logger if you want to log to
 // something other than root.
-func PanicContext(l log15.Logger, msg string, ctx ...interface{}) {
+func PanicContext(l log15.Logger, msg string, ctx ...any) {
 	ctx = append(ctx, "panic", true)
 	l.Crit(msg, ctx...)
 	panic(msg)
@@ -227,13 +308,13 @@ func PanicContext(l log15.Logger, msg string, ctx ...interface{}) {
 // Fatal logs a message at the Crit level with key/val fatal=true added to the
 // context and then calls os.Exit(1). Operates on the root Logger. The exit is
 // not recoverable and deferred functions do not get called.
-func Fatal(msg string, ctx ...interface{}) {
+func Fatal(msg string, ctx ...any) {
 	FatalContext(log15.Root(), msg, ctx...)
 }
 
 // FatalContext is like Fatal(), but also takes a Logger if you want to log to
 // something other than root.
-func FatalContext(l log15.Logger, msg string, ctx ...interface{}) {
+func FatalContext(l log15.Logger, msg string, ctx ...any) {
 	ctx = append(ctx, "fatal", true)
 	l.Crit(msg, ctx...)
 	exitFunc(1)
