@@ -20,12 +20,14 @@ package l15h_test
 
 import (
 	"bytes"
-	log "github.com/inconshreveable/log15"
-	"github.com/sb10/l15h"
-	. "github.com/smartystreets/goconvey/convey"
+	"errors"
 	"os"
 	"os/exec"
 	"testing"
+
+	log "github.com/inconshreveable/log15/v3"
+	"github.com/sb10/l15h/v2"
+	. "github.com/smartystreets/goconvey/convey"
 )
 
 func TestStore(t *testing.T) {
@@ -119,7 +121,7 @@ func TestCaller(t *testing.T) {
 			log.Crit(msg)
 			lm := buff.String()
 			So(lm, ShouldContainSubstring, em)
-			So(lm, ShouldContainSubstring, ` stack="[github.com/sb10/l15h/l15h_test.go:`)
+			So(lm, ShouldContainSubstring, ` stack="[l15h_test.go:`)
 		})
 
 		Reset(func() {
@@ -207,7 +209,8 @@ func TestFatal(t *testing.T) {
 		cmd := exec.Command(os.Args[0], "-test.run=TestFatal")
 		cmd.Env = append(os.Environ(), "L15H_TEST_FATAL=1")
 		out, err := cmd.CombinedOutput()
-		e, ok := err.(*exec.ExitError)
+		var e *exec.ExitError
+		ok := errors.As(err, &e)
 		So(ok && !e.Success(), ShouldBeTrue)
 		So(string(out), ShouldContainSubstring, " lvl=crit msg=msg fatal=true")
 
@@ -220,6 +223,7 @@ func TestFatal(t *testing.T) {
 		l15h.SetExitFunc(func(code int) {
 			i = code
 		})
+		defer l15h.SetExitFunc(os.Exit)
 
 		l15h.Fatal(msg)
 		So(i, ShouldEqual, 1)
@@ -227,9 +231,9 @@ func TestFatal(t *testing.T) {
 
 		Convey("And on a logger with context", func() {
 			cmd = exec.Command(os.Args[0], "-test.run=TestFatal")
-			cmd.Env = append(os.Environ(), "L15H_TEST_FATAL", "L15H_TEST_FATALCONTEXT=1")
+			cmd.Env = append(os.Environ(), "L15H_TEST_FATAL=1", "L15H_TEST_FATALCONTEXT=1")
 			out, err = cmd.CombinedOutput()
-			e, ok = err.(*exec.ExitError)
+			ok = errors.As(err, &e)
 			So(ok && !e.Success(), ShouldBeTrue)
 			So(string(out), ShouldContainSubstring, " lvl=crit msg=msg child=context extra=stuff fatal=true")
 		})
